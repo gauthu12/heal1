@@ -1,98 +1,103 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jenkins Self-Healing Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { @apply bg-white rounded-xl shadow-xl p-6; }
-    </style>
+  <meta charset="utf-8">
+  <title>Jenkins Self-Healing Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-gray-50">
-    <div class="container mx-auto py-8">
-        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">🚀 Jenkins Self-Healing Dashboard</h1>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="card"><canvas id="statusChart"></canvas></div>
-            <div class="card"><canvas id="retryChart"></canvas></div>
-            <div class="card"><canvas id="failureChart"></canvas></div>
-        </div>
-
-        <div class="card">
-            <h2 class="text-2xl font-semibold mb-4">📋 Jobs Status</h2>
-            <table class="w-full text-center">
-                <thead class="bg-gray-100">
-                    <tr>
-                        <th class="p-4">Job Name</th>
-                        <th class="p-4">Status</th>
-                        <th class="p-4">Retries Left</th>
-                        <th class="p-4">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for job in jobs %}
-                    <tr class="border-b">
-                        <td class="p-4">{{ job.name }}</td>
-                        <td class="p-4">
-                            {% if job.status == 'Success' %}<span class="text-green-600 font-bold">✔️ Success</span>{% endif %}
-                            {% if job.status == 'Running' %}<span class="text-yellow-600 font-bold">⏳ Running</span>{% endif %}
-                            {% if job.status == 'Failed' %}<span class="text-red-600 font-bold">❌ Failed</span>{% endif %}
-                        </td>
-                        <td class="p-4">{{ job.retries_left }}</td>
-                        <td class="p-4">
-                            <button onclick="retryJob('{{ job.name }}')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg">Retry 🔄</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+<body class="bg-gray-50 text-gray-900">
+  <div class="p-6">
+    <h1 class="text-4xl font-bold text-center mb-6">🚀 Jenkins Dashboard</h1>
+    <div class="flex justify-between mb-6">
+      <div class="card p-4 bg-white rounded shadow">
+        <canvas id="jobChart"></canvas>
+      </div>
+      <div class="card p-4 bg-white rounded shadow">
+        <canvas id="nodeChart"></canvas>
+      </div>
     </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Jobs Table -->
+      <div class="bg-white rounded shadow p-4">
+        <h2 class="text-xl font-semibold mb-2">Jobs</h2>
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100">
+            <tr><th>Name</th><th>Status</th><th>Retries</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {% for j in jobs %}
+            <tr class="border-b">
+              <td>{{j.name}}</td>
+              <td>{{j.status}}</td>
+              <td>{{j.retries_left}}</td>
+              <td><button onclick="retry('{{j.name}}')" class="px-2 py-1 bg-blue-500 text-white rounded">Retry</button></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <!-- Nodes Table -->
+      <div class="bg-white rounded shadow p-4">
+        <h2 class="text-xl font-semibold mb-2">Nodes</h2>
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100">
+            <tr><th>Name</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for n in nodes %}
+            <tr class="border-b"><td>{{n.name}}</td><td>{{n.status}}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chatbot -->
+  <div id="bot" class="fixed bottom-4 right-4 bg-white rounded-full p-2 shadow-lg">
+    <img src="https://img.icons8.com/fluency/48/000000/chatbot.png" onclick="openChat()" class="cursor-pointer"/>
+  </div>
+  <div id="chatWindow" class="hidden fixed bottom-16 right-4 bg-white rounded shadow-lg w-80 p-4">
+    <div id="messages" class="h-48 overflow-y-auto mb-2"></div>
+    <input id="msgIn" class="w-full border px-2 py-1" placeholder="Say something…" onkeydown="if(event.key==='Enter') sendMsg()"/>
+  </div>
 
 <script>
-// Chart Initialization
-let statusChart, retryChart, failureChart;
-const initCharts = () => {
-    const statusCtx = document.getElementById('statusChart').getContext('2d');
-    const retryCtx = document.getElementById('retryChart').getContext('2d');
-    const failureCtx = document.getElementById('failureChart').getContext('2d');
-
-    statusChart = new Chart(statusCtx, { type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#22c55e','#facc15','#ef4444'] }] }});
-    retryChart = new Chart(retryCtx, { type: 'line', data: { labels: [], datasets: [{ label: 'Retries', data: [], borderColor: '#0ea5e9', fill: true }] }});
-    failureChart = new Chart(failureCtx, { type: 'bar', data: { labels: [], datasets: [{ label: 'Failures', data: [], backgroundColor: '#ef4444' }] }});
+let jobChart,nodeChart;
+function fetchData(){
+  fetch('/analytics').then(r=>r.json()).then(d=>{
+    const jc = { labels:Object.keys(d.status_counts), data:Object.values(d.status_counts) };
+    jobChart.data.labels=jc.labels; jobChart.data.datasets[0].data=jc.data; jobChart.update();
+    const nc = { labels:Object.keys(d.node_counts), data:Object.values(d.node_counts) };
+    nodeChart.data.labels=nc.labels; nodeChart.data.datasets[0].data=nc.data; nodeChart.update();
+  });
+}
+window.onload=()=>{
+  const jctx = document.getElementById('jobChart').getContext('2d');
+  jobChart = new Chart(jctx,{ type:'doughnut', data:{ labels:[], datasets:[{ data:[],backgroundColor:['#4CAF50','#F44336','#FFC107'] }] } });
+  const nctx = document.getElementById('nodeChart').getContext('2d');
+  nodeChart = new Chart(nctx,{ type:'bar', data:{ labels:[], datasets:[{ data:[], backgroundColor:'#3B82F6' }] } });
+  fetchData(); setInterval(fetchData,30000);
 };
 
-// Fetch Data & Update Charts
-const fetchAnalytics = () => {
-    fetch('/analytics').then(res => res.json()).then(({status_counts, retry_trends, failure_frequency}) => {
-        statusChart.data.labels = Object.keys(status_counts);
-        statusChart.data.datasets[0].data = Object.values(status_counts);
-        statusChart.update();
+function retry(name){
+  fetch('/retry/'+encodeURIComponent(name)).then(r=>r.json()).then(j=>alert(j.message));
+}
 
-        retryChart.data.labels = Object.keys(retry_trends);
-        retryChart.data.datasets[0].data = Object.values(retry_trends);
-        retryChart.update();
-
-        failureChart.data.labels = Object.keys(failure_frequency);
-        failureChart.data.datasets[0].data = Object.values(failure_frequency);
-        failureChart.update();
+// Chatbot
+function openChat(){
+  document.getElementById('chatWindow').classList.toggle('hidden');
+}
+function sendMsg(){
+  const txt=document.getElementById('msgIn').value;
+  const msgBox=document.getElementById('messages');
+  msgBox.innerHTML+=`<div class="text-right text-blue-600">${txt}</div>`;
+  fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt})})
+    .then(r=>r.json()).then(res=>{
+      msgBox.innerHTML+=`<div class="text-left">${res.reply}</div>`;
+      document.getElementById('msgIn').value='';
+      msgBox.scrollTop=msgBox.scrollHeight;
     });
-};
-
-// Manual Retry
-const retryJob = (jobName) => {
-    fetch(`/retry/${jobName}`).then(res => res.json()).then(data => alert(data.message));
-};
-
-// Initialize & Refresh every 30 sec
-initCharts();
-fetchAnalytics();
-setInterval(fetchAnalytics, 30000);
-setTimeout(() => { window.location.reload(); }, 30000);
+}
 </script>
-</body>
-</html>
