@@ -1,3 +1,4 @@
+
 import jenkins
 import json
 from datetime import datetime
@@ -26,13 +27,9 @@ def fetch_all_jobs_from_folder(folder_name):
                 color = info.get('color', '')
                 status = ('Success' if color == 'blue' else 
                           'Running' if 'anime' in color else 'Failed')
-                retries_done = retry_tracker.get(job_full_name, 0)
-                retries_left = max(0, 3 - retries_done if isinstance(retries_done, int) else 3)
-                jobs_info.append({
-                    'name': job_full_name,
-                    'status': status,
-                    'retries_left': retries_left
-                })
+                retries_done = int(retry_tracker.get(job_full_name, 0) or 0)
+                retries_left = max(0, 3 - retries_done)
+                jobs_info.append({'name': job_full_name, 'status': status, 'retries_left': retries_left})
     except Exception as e:
         print(f"Error fetching jobs recursively from folder '{folder_name}': {e}")
     return jobs_info
@@ -52,13 +49,9 @@ def fetch_jobs_status():
                 color = info.get('color', '')
                 status = ('Success' if color == 'blue' else 
                           'Running' if 'anime' in color else 'Failed')
-                retries_done = retry_tracker.get(job_full_name, 0)
-                retries_left = max(0, 3 - retries_done if isinstance(retries_done, int) else 3)
-                jobs_info.append({
-                    'name': job_full_name,
-                    'status': status,
-                    'retries_left': retries_left
-                })
+                retries_done = int(retry_tracker.get(job_full_name, 0) or 0)
+                retries_left = max(0, 3 - retries_done)
+                jobs_info.append({'name': job_full_name, 'status': status, 'retries_left': retries_left})
     except Exception as e:
         print(f"Error fetching jobs from view '{VIEW_NAME}': {e}")
     return jobs_info
@@ -66,8 +59,8 @@ def fetch_jobs_status():
 def retry_failed_jobs():
     jobs = fetch_jobs_status()
     for job in jobs:
-        retries_done = retry_tracker.get(job['name'], 0)
-        if job['status'] == 'Failed' and isinstance(retries_done, int) and retries_done < 3:
+        retries_done = int(retry_tracker.get(job['name'], 0) or 0)
+        if job['status'] == 'Failed' and retries_done < 3:
             try:
                 server.build_job(job['name'])
                 retry_tracker[job['name']] = retries_done + 1
@@ -76,10 +69,10 @@ def retry_failed_jobs():
                 log_failure(job['name'], f"Auto-retry failed: {e}")
 
 def manual_retry(job_name):
-    retries_done = retry_tracker.get(job_name, 0)
+    retries_done = int(retry_tracker.get(job_name, 0) or 0)
     try:
         server.build_job(job_name)
-        retry_tracker[job_name] = retries_done + 1 if isinstance(retries_done, int) else 1
+        retry_tracker[job_name] = retries_done + 1
         log_failure(job_name, f"Manual retry triggered.")
         return f"Manual retry for {job_name} triggered."
     except Exception as e:
