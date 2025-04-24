@@ -1,4 +1,3 @@
-
 import jenkins
 import json
 from datetime import datetime
@@ -12,27 +11,45 @@ server = jenkins.Jenkins(JENKINS_URL, username=USERNAME, password=API_TOKEN)
 
 retry_tracker = {}
 
-def fetch_all_jobs(view_name):
+def fetch_all_jobs_from_folder(folder_name):
     jobs_info = []
     try:
-        jobs = server.get_jobs(view_name=view_name)
+        jobs = server.get_jobs(folder_name)
         for job in jobs:
-            if job['_class'] == 'com.cloudbees.hudson.plugins.folder.Folder':
-                # Recursive call for folders
-                jobs_info.extend(fetch_all_jobs(job['name']))
+            job_full_name = job['fullname']
+            job_class = job['_class']
+            
+            if 'Folder' in job_class:
+                jobs_info.extend(fetch_all_jobs_from_folder(job_full_name))
             else:
-                name = job['fullname']
-                info = server.get_job_info(name)
+                info = server.get_job_info(job_full_name)
                 color = info['color']
                 status = 'Success' if color == 'blue' else 'Running' if 'anime' in color else 'Failed'
-                retries_left = max(0, 3 - retry_tracker.get(name, 0))
-                jobs_info.append({'name': name, 'status': status, 'retries_left': retries_left})
+                retries_left = max(0, 3 - retry_tracker.get(job_full_name, 0))
+                jobs_info.append({'name': job_full_name, 'status': status, 'retries_left': retries_left})
     except Exception as e:
-        print(f"Error fetching jobs recursively: {e}")
+        print(f"Error fetching jobs recursively from folder '{folder_name}': {e}")
     return jobs_info
 
 def fetch_jobs_status():
-    return fetch_all_jobs(VIEW_NAME)
+    jobs_info = []
+    try:
+        jobs_in_view = server.get_jobs(view_name=VIEW_NAME)
+        for job in jobs_in_view:
+            job_full_name = job['fullname']
+            job_class = job['_class']
+            
+            if 'Folder' in job_class:
+                jobs_info.extend(fetch_all_jobs_from_folder(job_full_name))
+            else:
+                info = server.get_job_info(job_full_name)
+                color = info['color']
+                status = 'Success' if color == 'blue' else 'Running' if 'anime' in color else 'Failed'
+                retries_left = max(0, 3 - retry_tracker.get(job_full_name, 0))
+                jobs_info.append({'name': job_full_name, 'status': status, 'retries_left': retries_left})
+    except Exception as e:
+        print(f"Error fetching jobs from view '{VIEW_NAME}': {e}")
+    return jobs_info
 
 def retry_failed_jobs():
     jobs = fetch_jobs_status()
