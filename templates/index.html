@@ -4,114 +4,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jenkins Self-Healing Dashboard with Analytics</title>
+    <title>Jenkins Self-Healing Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { @apply bg-white rounded-xl shadow-xl p-6; }
+    </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-    <div class="container mx-auto p-6">
-        <h1 class="text-3xl font-bold mb-6 text-center">🚀 Jenkins Self-Healing Dashboard</h1>
-
-        <div class="grid grid-cols-3 gap-4 mb-6">
-            <canvas id="statusChart"></canvas>
-            <canvas id="retryChart"></canvas>
-            <canvas id="failureChart"></canvas>
+<body class="bg-gray-50">
+    <div class="container mx-auto py-8">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">🚀 Jenkins Self-Healing Dashboard</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="card"><canvas id="statusChart"></canvas></div>
+            <div class="card"><canvas id="retryChart"></canvas></div>
+            <div class="card"><canvas id="failureChart"></canvas></div>
         </div>
 
-        <table class="min-w-full bg-white rounded-lg shadow-md">
-            <thead>
-                <tr>
-                    <th class="py-3 px-6 bg-gray-200">Job Name</th>
-                    <th class="py-3 px-6 bg-gray-200">Status</th>
-                    <th class="py-3 px-6 bg-gray-200">Retries Left</th>
-                    <th class="py-3 px-6 bg-gray-200">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for job in jobs %}
-                <tr class="text-center border-b">
-                    <td class="py-3 px-6">{{ job.name }}</td>
-                    <td class="py-3 px-6">{{ job.status }}</td>
-                    <td class="py-3 px-6">{{ job.retries_left }}</td>
-                    <td class="py-3 px-6">
-                        <button onclick="retryJob('{{ job.name }}')" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                            Retry 🔄
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <p class="text-center text-sm text-gray-500 mt-4">Auto-refreshes every 30 seconds</p>
+        <div class="card">
+            <h2 class="text-2xl font-semibold mb-4">📋 Jobs Status</h2>
+            <table class="w-full text-center">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-4">Job Name</th>
+                        <th class="p-4">Status</th>
+                        <th class="p-4">Retries Left</th>
+                        <th class="p-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr class="border-b">
+                        <td class="p-4">{{ job.name }}</td>
+                        <td class="p-4">
+                            {% if job.status == 'Success' %}<span class="text-green-600 font-bold">✔️ Success</span>{% endif %}
+                            {% if job.status == 'Running' %}<span class="text-yellow-600 font-bold">⏳ Running</span>{% endif %}
+                            {% if job.status == 'Failed' %}<span class="text-red-600 font-bold">❌ Failed</span>{% endif %}
+                        </td>
+                        <td class="p-4">{{ job.retries_left }}</td>
+                        <td class="p-4">
+                            <button onclick="retryJob('{{ job.name }}')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg">Retry 🔄</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
 <script>
-// Initialize Charts
-const statusCtx = document.getElementById('statusChart').getContext('2d');
-const retryCtx = document.getElementById('retryChart').getContext('2d');
-const failureCtx = document.getElementById('failureChart').getContext('2d');
-
+// Chart Initialization
 let statusChart, retryChart, failureChart;
+const initCharts = () => {
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    const retryCtx = document.getElementById('retryChart').getContext('2d');
+    const failureCtx = document.getElementById('failureChart').getContext('2d');
 
-function fetchAnalytics(){
-    fetch('/analytics')
-        .then(response => response.json())
-        .then(data => {
-            updateStatusChart(data.status_counts);
-            updateRetryChart(data.retry_trends);
-            updateFailureChart(data.failure_frequency);
-        });
-}
+    statusChart = new Chart(statusCtx, { type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#22c55e','#facc15','#ef4444'] }] }});
+    retryChart = new Chart(retryCtx, { type: 'line', data: { labels: [], datasets: [{ label: 'Retries', data: [], borderColor: '#0ea5e9', fill: true }] }});
+    failureChart = new Chart(failureCtx, { type: 'bar', data: { labels: [], datasets: [{ label: 'Failures', data: [], backgroundColor: '#ef4444' }] }});
+};
 
-function updateStatusChart(data){
-    if(statusChart) statusChart.destroy();
-    statusChart = new Chart(statusCtx, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(data),
-            datasets: [{
-                data: Object.values(data),
-                backgroundColor: ['#4CAF50', '#FFC107', '#F44336']
-            }]
-        }
+// Fetch Data & Update Charts
+const fetchAnalytics = () => {
+    fetch('/analytics').then(res => res.json()).then(({status_counts, retry_trends, failure_frequency}) => {
+        statusChart.data.labels = Object.keys(status_counts);
+        statusChart.data.datasets[0].data = Object.values(status_counts);
+        statusChart.update();
+
+        retryChart.data.labels = Object.keys(retry_trends);
+        retryChart.data.datasets[0].data = Object.values(retry_trends);
+        retryChart.update();
+
+        failureChart.data.labels = Object.keys(failure_frequency);
+        failureChart.data.datasets[0].data = Object.values(failure_frequency);
+        failureChart.update();
     });
-}
+};
 
-function updateRetryChart(data){
-    if(retryChart) retryChart.destroy();
-    retryChart = new Chart(retryCtx, {
-        type: 'line',
-        data: {
-            labels: Object.keys(data),
-            datasets: [{ label: 'Retries', data: Object.values(data), borderColor: '#3b82f6', fill: false }]
-        }
-    });
-}
+// Manual Retry
+const retryJob = (jobName) => {
+    fetch(`/retry/${jobName}`).then(res => res.json()).then(data => alert(data.message));
+};
 
-function updateFailureChart(data){
-    if(failureChart) failureChart.destroy();
-    failureChart = new Chart(failureCtx, {
-        type: 'bar',
-        data: {
-            labels: Object.keys(data),
-            datasets: [{ label: 'Failures', data: Object.values(data), backgroundColor: '#ef4444' }]
-        }
-    });
-}
-
-function retryJob(jobName) {
-    fetch('/retry/' + jobName)
-        .then(response => response.json())
-        .then(data => alert(data.message))
-        .catch(error => alert('Error triggering retry!'));
-}
-
-// Fetch analytics data every 30 seconds
+// Initialize & Refresh every 30 sec
+initCharts();
 fetchAnalytics();
 setInterval(fetchAnalytics, 30000);
-
 setTimeout(() => { window.location.reload(); }, 30000);
 </script>
-
 </body>
 </html>
