@@ -6,16 +6,16 @@ from datetime import datetime
 JENKINS_URL = 'http://localhost:8080'
 USERNAME = 'admin'
 API_TOKEN = 'aerrt334434'
-VIEW_NAME = 'test1'  # Assuming 'test1' is the view name
+VIEW_NAME = 'test1'  # The actual Jenkins view name
 
 server = jenkins.Jenkins(JENKINS_URL, username=USERNAME, password=API_TOKEN)
 
 retry_tracker = {}
 
-def traverse_folders(base_path):
+def traverse_folders(folder_path):
     jobs_info = []
     try:
-        jobs = server.get_jobs(base_path)
+        jobs = server.get_jobs(folder_path)
         for job in jobs:
             job_full_name = job['fullname']
             job_class = job['_class']
@@ -31,11 +31,31 @@ def traverse_folders(base_path):
                 retries_left = max(0, 3 - retries_done)
                 jobs_info.append({'name': job_full_name, 'status': status, 'retries_left': retries_left})
     except Exception as e:
-        print(f"Error traversing path '{base_path}': {e}")
+        print(f"Error traversing folder '{folder_path}': {e}")
     return jobs_info
 
 def fetch_jobs_status():
-    return traverse_folders(VIEW_NAME)
+    jobs_info = []
+    try:
+        # Start by fetching jobs from the view
+        jobs_in_view = server.get_jobs(view_name=VIEW_NAME)
+        for job in jobs_in_view:
+            job_full_name = job['fullname']
+            job_class = job['_class']
+
+            if 'Folder' in job_class:
+                jobs_info.extend(traverse_folders(job_full_name))
+            else:
+                info = server.get_job_info(job_full_name)
+                color = info.get('color', '')
+                status = ('Success' if color == 'blue' else 
+                          'Running' if 'anime' in color else 'Failed')
+                retries_done = int(retry_tracker.get(job_full_name, 0) or 0)
+                retries_left = max(0, 3 - retries_done)
+                jobs_info.append({'name': job_full_name, 'status': status, 'retries_left': retries_left})
+    except Exception as e:
+        print(f"Error fetching jobs from view '{VIEW_NAME}': {e}")
+    return jobs_info
 
 def retry_failed_jobs():
     jobs = fetch_jobs_status()
