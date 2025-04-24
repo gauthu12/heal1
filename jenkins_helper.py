@@ -12,20 +12,27 @@ server = jenkins.Jenkins(JENKINS_URL, username=USERNAME, password=API_TOKEN)
 
 retry_tracker = {}
 
-def fetch_jobs_status():
+def fetch_all_jobs(view_name):
     jobs_info = []
     try:
-        jobs = server.get_jobs(view_name=VIEW_NAME)
+        jobs = server.get_jobs(view_name=view_name)
         for job in jobs:
-            name = job['name']
-            info = server.get_job_info(name)
-            color = info['color']
-            status = 'Success' if color == 'blue' else 'Running' if 'anime' in color else 'Failed'
-            retries_left = max(0, 3 - retry_tracker.get(name, 0))
-            jobs_info.append({'name': name, 'status': status, 'retries_left': retries_left})
+            if job['_class'] == 'com.cloudbees.hudson.plugins.folder.Folder':
+                # Recursive call for folders
+                jobs_info.extend(fetch_all_jobs(job['name']))
+            else:
+                name = job['fullname']
+                info = server.get_job_info(name)
+                color = info['color']
+                status = 'Success' if color == 'blue' else 'Running' if 'anime' in color else 'Failed'
+                retries_left = max(0, 3 - retry_tracker.get(name, 0))
+                jobs_info.append({'name': name, 'status': status, 'retries_left': retries_left})
     except Exception as e:
-        print(f"Error fetching jobs: {e}")
+        print(f"Error fetching jobs recursively: {e}")
     return jobs_info
+
+def fetch_jobs_status():
+    return fetch_all_jobs(VIEW_NAME)
 
 def retry_failed_jobs():
     jobs = fetch_jobs_status()
