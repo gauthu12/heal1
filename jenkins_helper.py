@@ -10,7 +10,6 @@ VIEW_NAME = 'DevOps-Jobs'
 
 server = jenkins.Jenkins(JENKINS_URL, username=USERNAME, password=API_TOKEN)
 
-# Track retries
 retry_tracker = {}
 
 def fetch_jobs_status():
@@ -21,8 +20,8 @@ def fetch_jobs_status():
             name = job['name']
             info = server.get_job_info(name)
             color = info['color']
-            status = 'Success' if color == 'blue' else 'Running' if color == 'blue_anime' else 'Failed'
-            retries_left = 3 - retry_tracker.get(name, 0)
+            status = 'Success' if color == 'blue' else 'Running' if 'anime' in color else 'Failed'
+            retries_left = max(0, 3 - retry_tracker.get(name, 0))
             jobs_info.append({'name': name, 'status': status, 'retries_left': retries_left})
     except Exception as e:
         print(f"Error fetching jobs: {e}")
@@ -35,9 +34,9 @@ def retry_failed_jobs():
             try:
                 server.build_job(job['name'])
                 retry_tracker[job['name']] = retry_tracker.get(job['name'], 0) + 1
-                log_failure(job['name'], f"Auto-retry {retry_tracker[job['name']]} triggered.")
+                log_failure(job['name'], f"Auto-retry attempt {retry_tracker[job['name']]}: Triggered due to job failure.")
             except Exception as e:
-                log_failure(job['name'], f"Retry failed: {e}")
+                log_failure(job['name'], f"Auto-retry failed: {e}")
 
 def manual_retry(job_name):
     try:
