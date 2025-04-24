@@ -6,7 +6,7 @@ from datetime import datetime
 JENKINS_URL = 'http://localhost:8080'
 USERNAME = 'admin'
 API_TOKEN = 'aerrt334434'
-VIEW_NAME = 'test1'  # The actual Jenkins view name
+VIEW_NAME = 'test'  # Your actual Jenkins view
 
 server = jenkins.Jenkins(JENKINS_URL, username=USERNAME, password=API_TOKEN)
 
@@ -14,11 +14,13 @@ retry_tracker = {}
 
 def traverse_folders(folder_path):
     jobs_info = []
+    print(f"Traversing folder: {folder_path}")
     try:
         jobs = server.get_jobs(folder_path)
         for job in jobs:
             job_full_name = job['fullname']
             job_class = job['_class']
+            print(f"Found: {job_full_name} | Type: {job_class}")
 
             if 'Folder' in job_class:
                 jobs_info.extend(traverse_folders(job_full_name))
@@ -36,12 +38,13 @@ def traverse_folders(folder_path):
 
 def fetch_jobs_status():
     jobs_info = []
+    print(f"Fetching jobs from view: {VIEW_NAME}")
     try:
-        # Start by fetching jobs from the view
         jobs_in_view = server.get_jobs(view_name=VIEW_NAME)
         for job in jobs_in_view:
             job_full_name = job['fullname']
             job_class = job['_class']
+            print(f"Top Level: {job_full_name} | Type: {job_class}")
 
             if 'Folder' in job_class:
                 jobs_info.extend(traverse_folders(job_full_name))
